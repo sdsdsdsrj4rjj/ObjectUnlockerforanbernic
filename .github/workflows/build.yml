@@ -101,14 +101,14 @@ jobs:
           import re
 
           src = Path("UnlockCodes.c").read_text()
-          codes = re.findall(r'\\.code\\s*=\\s*"([^"]+)"', src)
+          codes = re.findall(r'\.code\s*=\s*"([^"]+)"', src)
           codes = [c for c in codes if c.startswith("writenop ")]
-          Path("release/ManiaObjectUnlocker/Codes.txt").write_text("\\n".join(codes) + "\\n")
+          Path("release/ManiaObjectUnlocker/Codes.txt").write_text("\n".join(codes) + "\n")
 
           mod = Path("release/ManiaObjectUnlocker/mod.ini")
           text = mod.read_text()
           if "Codes=" not in text:
-              text = text.rstrip("\\n") + "\\nCodes=Codes.txt\\n"
+              text = text.rstrip("\n") + "\nCodes=Codes.txt\n"
           mod.write_text(text)
           print(f"Packaged {len(codes)} unlock codes")
           PY
