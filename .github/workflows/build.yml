@@ -73,13 +73,18 @@ jobs:
           cd release
           zip -r ../ManiaObjectUnlocker-Anbernic-ARM64.zip ManiaObjectUnlocker
 
+      - name: Stage release assets
+        run: |
+          rm -rf release_assets
+          mkdir -p release_assets
+          cp Mania-Decomp-Mods/ManiaObjectUnlocker/ManiaObjectUnlocker-Anbernic-ARM64.zip release_assets/
+          cp Mania-Decomp-Mods/ManiaObjectUnlocker/build/libManiaObjectUnlocker.so release_assets/
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v6
         with:
           name: ManiaObjectUnlocker-Anbernic-ARM64
-          path: |
-            Mania-Decomp-Mods/ManiaObjectUnlocker/ManiaObjectUnlocker-Anbernic-ARM64.zip
-            Mania-Decomp-Mods/ManiaObjectUnlocker/build/libManiaObjectUnlocker.so
+          path: release_assets/
 
   release:
     needs: build
