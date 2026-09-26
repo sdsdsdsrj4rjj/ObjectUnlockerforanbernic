@@ -1,0 +1,117 @@
+name: Build Mania Object Unlocker for Anbernic ARM64
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    container: debian:bullseye
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install build dependencies
+        run: |
+          printf '%s\n' \
+            'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260610T000000Z/ bullseye main' \
+            'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260610T000000Z/ bullseye-updates main' \
+            'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260610T000000Z/ bullseye-security main' \
+            > /etc/apt/sources.list
+          printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99no-check-valid-until
+          apt-get update
+          apt-get install -y build-essential cmake git ca-certificates file zip
+
+      - name: Clone Mania Object Unlocker source
+        run: |
+          git clone --recursive --depth 1 https://github.com/MegAmi24/Mania-Decomp-Mods.git Mania-Decomp-Mods
+
+      - name: Configure ARM64 Steam/Plus build
+        working-directory: Mania-Decomp-Mods/ManiaObjectUnlocker
+        run: |
+          cmake -B build \
+            -DRETRO_REVISION=2 \
+            -DRETRO_MOD_LOADER_VER=2 \
+            -DGAME_VERSION=6 \
+            -DMANIA_PREPLUS=OFF \
+            -DMOD_INCLUDE_EDITOR=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS_RELEASE="-O3 -DNDEBUG"
+
+      - name: Build
+        working-directory: Mania-Decomp-Mods/ManiaObjectUnlocker
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: Verify ARM64 library
+        working-directory: Mania-Decomp-Mods/ManiaObjectUnlocker
+        run: |
+          file build/libManiaObjectUnlocker.so
+          readelf -h build/libManiaObjectUnlocker.so | grep -E 'Class:|Machine:'
+          test -f build/libManiaObjectUnlocker.so
+          test -f build/mod.ini
+
+      - name: Package release
+        working-directory: Mania-Decomp-Mods/ManiaObjectUnlocker
+        run: |
+          rm -rf release
+          mkdir -p release/ManiaObjectUnlocker
+          cp build/mod.ini release/ManiaObjectUnlocker/mod.ini
+          cp build/libManiaObjectUnlocker.so release/ManiaObjectUnlocker/libManiaObjectUnlocker.so
+          printf '%s\n' \
+            'Built for ARM64 Anbernic/Linux' \
+            'RETRO_REVISION=2 (Steam/Mania decomp)' \
+            'GAME_VERSION=6' \
+            'Source: https://github.com/MegAmi24/Mania-Decomp-Mods' \
+            > release/ManiaObjectUnlocker/BUILD_INFO.txt
+          cd release
+          zip -r ../ManiaObjectUnlocker-Anbernic-ARM64.zip ManiaObjectUnlocker
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ManiaObjectUnlocker-Anbernic-ARM64
+          path: |
+            Mania-Decomp-Mods/ManiaObjectUnlocker/ManiaObjectUnlocker-Anbernic-ARM64.zip
+            Mania-Decomp-Mods/ManiaObjectUnlocker/build/libManiaObjectUnlocker.so
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download build
+        uses: actions/download-artifact@v6
+        with:
+          name: ManiaObjectUnlocker-Anbernic-ARM64
+          path: release
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v1.0.0-anbernic-arm64"
+          ZIP="release/ManiaObjectUnlocker-Anbernic-ARM64.zip"
+          SO="release/libManiaObjectUnlocker.so"
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" "$SO" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$ZIP" "$SO" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Mania Object Unlocker ARM64 for Anbernic" \
+              --notes "ARM64 build for Linux/Anbernic devices.
+
+Built from MegAmi24/Mania-Decomp-Mods with:
+- RETRO_REVISION=2
+- RETRO_MOD_LOADER_VER=2
+- GAME_VERSION=6
+
+Source: https://github.com/MegAmi24/Mania-Decomp-Mods"
+          fi
