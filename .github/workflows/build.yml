@@ -100,7 +100,7 @@ jobs:
           from pathlib import Path
           import re
 
-          src = Path("UnlockCodes.c").read_text()
+          src = Path("ManiaObjectUnlocker/UnlockCodes.c").read_text()
           codes = re.findall(r'\.code\s*=\s*"([^"]+)"', src)
           codes = [c for c in codes if c.startswith("writenop ")]
           Path("release/ManiaObjectUnlocker/Codes.txt").write_text("\n".join(codes) + "\n")
