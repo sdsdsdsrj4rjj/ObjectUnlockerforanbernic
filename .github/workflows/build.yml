@@ -95,11 +95,30 @@ jobs:
           mkdir -p release/ManiaObjectUnlocker
           cp build/mod.ini release/ManiaObjectUnlocker/mod.ini
           cp build/libManiaObjectUnlocker.so release/ManiaObjectUnlocker/libManiaObjectUnlocker.so
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          src = Path("UnlockCodes.c").read_text()
+          codes = re.findall(r'\\.code\\s*=\\s*"([^"]+)"', src)
+          codes = [c for c in codes if c.startswith("writenop ")]
+          Path("release/ManiaObjectUnlocker/Codes.txt").write_text("\\n".join(codes) + "\\n")
+
+          mod = Path("release/ManiaObjectUnlocker/mod.ini")
+          text = mod.read_text()
+          if "Codes=" not in text:
+              text = text.rstrip("\\n") + "\\nCodes=Codes.txt\\n"
+          mod.write_text(text)
+          print(f"Packaged {len(codes)} unlock codes")
+          PY
+
           printf '%s\n' \
             'Built for ARM64 Anbernic/Linux' \
             'RETRO_REVISION=2 (Steam/Mania decomp)' \
             'GAME_VERSION=6' \
             'Linux portability patch applied to UnlockCodes.c' \
+            'All supported Mania Object Unlocker codes included in Codes.txt' \
             'Source: https://github.com/MegAmi24/Mania-Decomp-Mods' \
             > release/ManiaObjectUnlocker/BUILD_INFO.txt
           cd release
