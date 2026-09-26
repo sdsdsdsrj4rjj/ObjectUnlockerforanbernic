@@ -5,9 +5,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
@@ -31,6 +28,40 @@ jobs:
       - name: Clone Mania Object Unlocker source
         run: |
           git clone --recursive --depth 1 https://github.com/MegAmi24/Mania-Decomp-Mods.git Mania-Decomp-Mods
+
+      - name: Apply Linux portability fixes
+        working-directory: Mania-Decomp-Mods/ManiaObjectUnlocker/ManiaObjectUnlocker
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("UnlockCodes.c")
+          s = p.read_text()
+
+          s = s.replace('#include "UnlockCodes.h"\n',
+                        '#include "UnlockCodes.h"\n#include <stdio.h>\n')
+
+          s = s.replace('FileIO *file = fOpen(cStr, "r");',
+                        'FILE *file = fopen(cStr, "r");')
+          s = s.replace('fClose(file);',
+                        'fclose(file);')
+
+          s = s.replace('FileIO *file2 = fOpen(cStr, "r");',
+                        'FILE *file2 = fopen(cStr, "r");')
+          s = s.replace('while (fGets(buffer, MAX_LEN, file2))',
+                        'while (fgets(buffer, MAX_LEN, file2))')
+          s = s.replace('fClose(file2);',
+                        'fclose(file2);')
+
+          s = s.replace('strcat_s(lstName, MAX_LEN, buffer);',
+                        'strcat(lstName, buffer);')
+          s = s.replace('strcpy_s(activeUnlocks[unlockedCount], MAX_LEN, unlockCodes[i].unlock);',
+                        'strcpy(activeUnlocks[unlockedCount], unlockCodes[i].unlock);')
+
+          p.write_text(s)
+          PY
+
+          grep -nE 'fOpen|fClose|fGets|strcat_s|strcpy_s' UnlockCodes.c || true
 
       - name: Configure ARM64 Steam/Plus build
         working-directory: Mania-Decomp-Mods/ManiaObjectUnlocker
@@ -57,7 +88,7 @@ jobs:
           test -f build/libManiaObjectUnlocker.so
           test -f build/mod.ini
 
-      - name: Package release
+      - name: Package mod
         working-directory: Mania-Decomp-Mods/ManiaObjectUnlocker
         run: |
           rm -rf release
@@ -68,55 +99,16 @@ jobs:
             'Built for ARM64 Anbernic/Linux' \
             'RETRO_REVISION=2 (Steam/Mania decomp)' \
             'GAME_VERSION=6' \
+            'Linux portability patch applied to UnlockCodes.c' \
             'Source: https://github.com/MegAmi24/Mania-Decomp-Mods' \
             > release/ManiaObjectUnlocker/BUILD_INFO.txt
           cd release
           zip -r ../ManiaObjectUnlocker-Anbernic-ARM64.zip ManiaObjectUnlocker
 
-      - name: Stage release assets
-        run: |
-          rm -rf release_assets
-          mkdir -p release_assets
-          cp Mania-Decomp-Mods/ManiaObjectUnlocker/ManiaObjectUnlocker-Anbernic-ARM64.zip release_assets/
-          cp Mania-Decomp-Mods/ManiaObjectUnlocker/build/libManiaObjectUnlocker.so release_assets/
-
-      - name: Upload build artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
           name: ManiaObjectUnlocker-Anbernic-ARM64
-          path: release_assets/
-
-  release:
-    needs: build
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Download build
-        uses: actions/download-artifact@v6
-        with:
-          name: ManiaObjectUnlocker-Anbernic-ARM64
-          path: release
-
-      - name: Create or update GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="v1.0.0-anbernic-arm64"
-          ZIP="release/ManiaObjectUnlocker-Anbernic-ARM64.zip"
-          SO="release/libManiaObjectUnlocker.so"
-
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$ZIP" "$SO" --repo "$GITHUB_REPOSITORY" --clobber
-          else
-            gh release create "$TAG" "$ZIP" "$SO" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Mania Object Unlocker ARM64 for Anbernic" \
-              --notes "ARM64 build for Linux/Anbernic devices.
-
-Built from MegAmi24/Mania-Decomp-Mods with:
-- RETRO_REVISION=2
-- RETRO_MOD_LOADER_VER=2
-- GAME_VERSION=6
-
-Source: https://github.com/MegAmi24/Mania-Decomp-Mods"
-          fi
+          path: |
+            Mania-Decomp-Mods/ManiaObjectUnlocker/ManiaObjectUnlocker-Anbernic-ARM64.zip
+            Mania-Decomp-Mods/ManiaObjectUnlocker/build/libManiaObjectUnlocker.so
